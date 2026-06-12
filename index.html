@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WC2026 — Match Analyzer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0A0A0F; --panel:#12121C; --panel-2:#1A1A28; --line:#2A2A3A;
+    --text:#E8E8F0; --muted:#8888A0;
+    --cyan:#00E0E8; --green:#4ADE80; --red:#F87171; --amber:#FFAA44;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; background:var(--bg); color:var(--text); font-family:'Space Grotesk',sans-serif; padding:28px 36px 80px; }
+  h1{ font-size:1.6rem; font-weight:700; margin:0 0 4px; letter-spacing:0.02em; }
+  .subtitle{ color:var(--muted); font-size:0.9rem; margin:0 0 24px; max-width:900px; line-height:1.5; }
+  nav{ margin-bottom:20px; }
+  nav a{ color:var(--muted); text-decoration:none; font-size:0.85rem; margin-right:18px; border-bottom:2px solid transparent; padding-bottom:4px; }
+  nav a.active{ color:var(--cyan); border-bottom-color:var(--cyan); }
+  nav a:hover{ color:var(--text); }
+
+  .layout{ display:grid; grid-template-columns:290px 340px 1fr 300px; gap:20px; align-items:start; }
+  @media (max-width:1350px){ .layout{grid-template-columns:1fr 1fr; } }
+  @media (max-width:700px){ .layout{grid-template-columns:1fr; } }
+  .panel{ background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px 20px; }
+  .panel h2{ font-size:0.78rem; text-transform:uppercase; letter-spacing:0.12em; color:var(--cyan); margin:0 0 14px; font-weight:700; }
+
+  label{ display:block; font-size:0.78rem; color:var(--muted); margin:12px 0 5px; }
+  .hint{ font-size:0.68rem; color:var(--muted); margin-top:2px; line-height:1.4; }
+  input[type=number], input[type=text], input[type=date], select{
+    width:100%; background:#050510; border:1px solid var(--line); border-radius:6px;
+    color:var(--cyan); font-family:'JetBrains Mono',monospace; font-size:0.9rem; padding:7px 9px;
+  }
+  input:focus, select:focus{outline:1px solid var(--cyan);}
+  select{ font-family:'Space Grotesk',sans-serif; color:var(--text); }
+
+  input.optional-n{ background:#06303a; border-color:var(--cyan); color:#bdfdff; }
+  input.assumption{ background:#1a1200; border-color:var(--amber); color:var(--amber); }
+
+  .two-col{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .stat-row{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .col-label{ font-size:0.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; margin-top:10px;}
+
+  .calc-box{
+    background:#111128; border:1px solid var(--line); border-radius:6px;
+    padding:7px 9px; font-family:'JetBrains Mono',monospace; color:#F0E040; font-size:0.85rem; text-align:center;
+  }
+  .calc-box.final{ color:var(--cyan); font-weight:700; border-color:var(--cyan); }
+  .calc-label{ font-size:0.7rem; color:var(--muted); margin:10px 0 4px; }
+
+  .error-box{
+    background:rgba(248,113,113,0.1); border:1px solid var(--red); color:var(--red);
+    border-radius:6px; padding:10px 12px; font-size:0.8rem; margin-top:12px; line-height:1.5;
+  }
+  .flag-box{
+    background:rgba(255,170,68,0.08); border:1px solid var(--amber); color:var(--amber);
+    border-radius:6px; padding:8px 10px; font-size:0.78rem; margin-top:10px; line-height:1.5;
+  }
+
+  .grid-wrap{overflow-x:auto;}
+  table.grid{ border-collapse:collapse; font-family:'JetBrains Mono',monospace; font-size:0.62rem; margin:0 auto; }
+  table.grid th{ color:var(--muted); font-weight:500; padding:2px 3px; text-align:center; }
+  table.grid td{ width:34px; height:28px; text-align:center; border:1px solid var(--bg); border-radius:3px; color:#0A0A0F; font-weight:700; }
+  .axis-label{ text-align:center; color:var(--muted); font-size:0.66rem; text-transform:uppercase; letter-spacing:0.1em; margin-top:8px; }
+  .charts{display:flex; gap:12px; margin-top:8px;}
+  .chart-box{flex:1; background:var(--panel-2); border-radius:8px; padding:8px; height:120px;}
+
+  .bestbet{ text-align:center; padding:16px 12px; border-radius:8px; }
+  .bestbet.found{ background:rgba(74,222,128,0.1); border:1px solid var(--green); }
+  .bestbet.none{ background:rgba(248,113,113,0.08); border:1px solid var(--red); }
+  .bestbet.blocked{ background:rgba(255,170,68,0.08); border:1px solid var(--amber); }
+  .bestbet .verdict{ font-size:1.05rem; font-weight:700; margin-bottom:6px; }
+  .bestbet.found .verdict{ color:var(--green); }
+  .bestbet.none .verdict{ color:var(--red); }
+  .bestbet.blocked .verdict{ color:var(--amber); }
+  .bestbet .detail{ font-size:0.8rem; color:var(--muted); line-height:1.6; }
+  .bestbet .stat{ font-family:'JetBrains Mono',monospace; color:var(--text); font-weight:700; }
+
+  .markets-section{ margin-top:20px; }
+  table.markets{ width:100%; border-collapse:collapse; font-size:0.85rem; }
+  table.markets th{
+    text-align:right; color:var(--muted); font-size:0.7rem; text-transform:uppercase;
+    letter-spacing:0.08em; padding:8px 6px; border-bottom:1px solid var(--line);
+  }
+  table.markets th:first-child{ text-align:left; }
+  table.markets td{ padding:6px; border-bottom:1px solid var(--line); font-family:'JetBrains Mono',monospace; text-align:right; }
+  table.markets td.label{ font-family:'Space Grotesk',sans-serif; text-align:left; }
+  table.markets td input[type=number]{ width:70px; text-align:right; padding:5px 6px; font-size:0.85rem; }
+  .edge-pos{ color:var(--green); font-weight:700; }
+  .edge-neg{ color:var(--red); }
+  .edge-zero{ color:var(--muted); }
+  tr.best-row td{ background:rgba(74,222,128,0.08); }
+  tr.best-row td.label{ color:var(--green); font-weight:700; }
+  .group-row td{
+    font-family:'Space Grotesk',sans-serif; text-transform:uppercase; letter-spacing:0.1em;
+    font-size:0.68rem; color:var(--amber); background:var(--panel-2); border-bottom:none; padding-top:14px;
+  }
+  button{
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text); border-radius:6px;
+    padding:9px 14px; font-family:'Space Grotesk',sans-serif; font-size:0.82rem; cursor:pointer; transition:border-color .15s;
+  }
+  button:hover{border-color:var(--cyan);}
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html" class="active">Match Analyzer</a>
+  <a href="bankroll.html">Bankroll</a>
+</nav>
+
+<h1>Match Analyzer</h1>
+<p class="subtitle">Two independent strength estimates — <strong>Elo-based</strong> (eloratings.net, converted to expected
+goals with a curve fitted on ~40,000 international matches) and <strong>form-based</strong> (last-10 goal averages with
+shrinkage) — blended into final xG, then run through a Dixon-Coles scoreline grid to price every market.
+<span style="color:var(--cyan)">Cyan</span> = optional input. <span style="color:var(--amber)">Amber</span> = editable
+assumption, leave at default unless you have a reason.</p>
+
+<div class="layout">
+
+  <!-- MATCH SETUP -->
+  <div class="panel">
+    <h2>Match Setup</h2>
+    <label for="homeTeam">Home team</label>
+    <input type="text" id="homeTeam" placeholder="e.g. Argentina">
+    <label for="awayTeam">Away team</label>
+    <input type="text" id="awayTeam" placeholder="e.g. France">
+    <div class="two-col">
+      <div>
+        <label for="matchDate">Match date</label>
+        <input type="date" id="matchDate">
+      </div>
+      <div>
+        <label for="stage">Stage</label>
+        <input type="text" id="stage" placeholder="Group A">
+      </div>
+    </div>
+
+    <label for="venue">Venue</label>
+    <select id="venue">
+      <option value="neutral">Neutral (most WC matches)</option>
+      <option value="home">First team is host nation (USA / Mexico / Canada)</option>
+    </select>
+    <div class="hint">Host nation playing at home gets +100 Elo (eloratings.net standard).</div>
+
+    <label for="striker">Key striker missing? (either team)</label>
+    <select id="striker"><option value="N">No</option><option value="Y">Yes</option></select>
+    <div class="hint">Yes = hard override. Blocks every market regardless of edge. Check transfermarkt.com.</div>
+
+    <label for="knockout">Knockout / elimination match?</label>
+    <select id="knockout"><option value="N">No</option><option value="Y">Yes</option></select>
+    <div class="hint">Shown as a caution flag — knockout matches tend to be more cautious and lower-scoring.</div>
+
+    <label>Current bankroll (R)</label>
+    <div class="calc-box" id="bankrollDisplay" style="font-size:1.05rem;">—</div>
+    <div class="hint">Managed on the <a href="bankroll.html" style="color:var(--cyan);">Bankroll</a> page. 5% exposure cap = <span id="capDisplay">—</span>.</div>
+  </div>
+
+  <!-- RATINGS & FORM -->
+  <div class="panel">
+    <h2>Ratings &amp; Form</h2>
+
+    <div class="stat-row">
+      <div class="col-label">Home</div><div class="col-label">Away</div>
+    </div>
+    <label style="margin-top:6px;">Elo rating (eloratings.net)</label>
+    <div class="stat-row">
+      <input type="number" id="homeElo" step="1" min="500" max="2400" placeholder="e.g. 2080">
+      <input type="number" id="awayElo" step="1" min="500" max="2400" placeholder="e.g. 1950">
+    </div>
+    <div class="hint">Search "eloratings.net [country]" — the rating shows in the result snippet.</div>
+
+    <label>Avg goals SCORED per game (last 10 — sofascore.com)</label>
+    <div class="stat-row">
+      <input type="number" id="homeScored" step="0.01" min="0" max="10" placeholder="2.00">
+      <input type="number" id="awayScored" step="0.01" min="0" max="10" placeholder="1.20">
+    </div>
+    <label>Avg goals CONCEDED per game (last 10)</label>
+    <div class="stat-row">
+      <input type="number" id="homeConceded" step="0.01" min="0" max="10" placeholder="0.80">
+      <input type="number" id="awayConceded" step="0.01" min="0" max="10" placeholder="1.50">
+    </div>
+    <label>Matches in sample (n) — leave blank if 10</label>
+    <div class="stat-row">
+      <input type="number" id="homeN" step="1" min="1" max="50" class="optional-n" placeholder="10">
+      <input type="number" id="awayN" step="1" min="1" max="50" class="optional-n" placeholder="10">
+    </div>
+    <div class="hint">Cyan: only fill in if a team's average comes from fewer than 10 matches.</div>
+
+    <div class="two-col" style="margin-top:6px;">
+      <div>
+        <label for="tournAvg">Tournament avg goals / team</label>
+        <input type="number" id="tournAvg" value="1.4" step="0.01" min="0.5" max="3" class="assumption">
+      </div>
+      <div>
+        <label for="rho">Dixon-Coles ρ</label>
+        <input type="number" id="rho" value="-0.13" step="0.01" min="-0.5" max="0.5" class="assumption">
+      </div>
+    </div>
+    <div class="two-col" style="margin-top:6px;">
+      <div>
+        <label for="blend">Elo weight in xG blend</label>
+        <input type="number" id="blend" value="0.6" step="0.05" min="0" max="1" class="assumption">
+      </div>
+      <div>
+        <label for="minEdge">Min edge to bet (%)</label>
+        <input type="number" id="minEdge" value="3" step="0.5" min="0" max="20" class="assumption">
+      </div>
+    </div>
+    <div class="hint">Blend 0.6 = final xG is 60% Elo-based, 40% form-based. Min edge filters out bets where your advantage is too small to survive model error.</div>
+
+    <div id="errorBox"></div>
+    <div id="flagBox"></div>
+
+    <div class="calc-label">Elo win expectancy (home / away)</div>
+    <div class="two-col">
+      <div class="calc-box" id="weHome">—</div>
+      <div class="calc-box" id="weAway">—</div>
+    </div>
+    <div class="calc-label">Elo-based xG / Form-based xG (home)</div>
+    <div class="two-col">
+      <div class="calc-box" id="eloXgHome">—</div>
+      <div class="calc-box" id="formXgHome">—</div>
+    </div>
+    <div class="calc-label">Elo-based xG / Form-based xG (away)</div>
+    <div class="two-col">
+      <div class="calc-box" id="eloXgAway">—</div>
+      <div class="calc-box" id="formXgAway">—</div>
+    </div>
+    <div class="calc-label">FINAL blended xG (home / away)</div>
+    <div class="two-col">
+      <div class="calc-box final" id="xgHome">—</div>
+      <div class="calc-box final" id="xgAway">—</div>
+    </div>
+  </div>
+
+  <!-- GRID -->
+  <div class="panel">
+    <h2>Scoreline Probability Grid</h2>
+    <div class="grid-wrap" id="gridWrap"></div>
+    <div class="axis-label">columns = away goals · rows = home goals</div>
+    <div class="charts">
+      <div class="chart-box"><canvas id="homeDist"></canvas></div>
+      <div class="chart-box"><canvas id="awayDist"></canvas></div>
+    </div>
+  </div>
+
+  <!-- BEST BET -->
+  <div class="panel">
+    <h2>Best Bet</h2>
+    <div id="bestBetBox" class="bestbet none">
+      <div class="verdict">Fill in ratings &amp; form</div>
+      <div class="detail">Enter both Elo ratings and all four goal averages to calculate xG.</div>
+    </div>
+    <div class="hint" style="margin-top:12px;">Best bet = highest expected value (EV) among qualifying markets:
+    edge ≥ your minimum, Kelly stake ≥ R50, and not a correct-score market (scoreline probabilities carry the most
+    model error, so they're shown for reference but never auto-recommended).</div>
+  </div>
+
+</div>
+
+<div class="markets-section panel">
+  <h2>All Markets — enter every Sportingbet odd you can find (all are saved, even on NO BET)</h2>
+  <table class="markets" id="marketsTable">
+    <thead>
+      <tr><th>Market</th><th>Model %</th><th>Odds</th><th>Implied %</th><th>Edge</th><th>EV</th><th>Kelly Stake (R)</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<div class="markets-section panel">
+  <h2>Save This Match</h2>
+  <p class="hint" style="margin-bottom:10px;">Saves everything above — inputs, xG, every market's odds, edge, EV and
+  stake, even on NO BET — to your database for the learning log.</p>
+  <button id="saveBtn" onclick="saveMatch()">Save match to database</button>
+  <div id="saveStatus" class="hint" style="margin-top:8px;"></div>
+
+  <h2 style="margin-top:24px;">Recent Matches</h2>
+  <div id="recentMatches" class="hint">Loading…</div>
+</div>
+
+<script>
+// ====== SUPABASE CONFIG ======
+const SUPABASE_URL = 'https://upstzzuhlyltnhdsixer.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVwc3R6enVobHlsdG5oZHNpeGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNzU1NTAsImV4cCI6MjA5Njg1MTU1MH0.9gyzrqDiYs1_XzqFckdMzNfgHwb5mjmgSZET_LvOSpY';
+const DB_READY = SUPABASE_URL.startsWith('https://') && SUPABASE_ANON_KEY.length > 50;
+// ==============================
+
+const MAX_G = 10;        // scoreline grid 0..10 goals each side
+const XG_CAP = 4.5;      // cap xG so extreme mismatches don't break the truncated grid
+
+function factorial(n){ let f=1; for(let i=2;i<=n;i++) f*=i; return f; }
+function poisson(k, lambda){ return Math.exp(-lambda) * Math.pow(lambda,k) / factorial(k); }
+function r2(x){ return Math.round(x*100)/100; }
+function r4(x){ return Math.round(x*10000)/10000; }
+function pct(x){ return (x*100).toFixed(1) + '%'; }
+
+// ---- Elo win expectancy (eloratings.net standard) ----
+function winExpectancy(eloA, eloB){
+  return 1 / (1 + Math.pow(10, -(eloA - eloB)/400));
+}
+
+// ---- Win expectancy -> expected goals, neutral field ----
+// Quartic fitted on ~40,000 international matches (football-rankings.com methodology,
+// as used in peer-reviewed World Cup simulation studies).
+function eloExpGoals(W){
+  if(W <= 0.9){
+    return 3.90388*W**4 - 0.58486*W**3 - 2.98315*W**2 + 3.13160*W + 0.33193;
+  }
+  const d = W - 0.9;
+  return 308097.45501*d**4 - 42803.04696*d**3 + 2116.35304*d**2 - 9.61869*d + 2.86899;
+}
+
+// ---- Dixon-Coles adjusted scoreline grid ----
+function buildGrid(lambda, mu, rho){
+  const grid = [];
+  for(let h=0; h<=MAX_G; h++){
+    grid.push([]);
+    for(let a=0; a<=MAX_G; a++) grid[h].push(poisson(h,lambda) * poisson(a,mu));
+  }
+  const tau = (h,a) => {
+    if(h===0 && a===0) return 1 - lambda*mu*rho;
+    if(h===0 && a===1) return 1 + lambda*rho;
+    if(h===1 && a===0) return 1 + mu*rho;
+    if(h===1 && a===1) return 1 - rho;
+    return 1;
+  };
+  for(let h=0;h<=1;h++) for(let a=0;a<=1;a++) grid[h][a] *= tau(h,a);
+  let total = 0;
+  for(let h=0;h<=MAX_G;h++) for(let a=0;a<=MAX_G;a++) total += grid[h][a];
+  for(let h=0;h<=MAX_G;h++) for(let a=0;a<=MAX_G;a++) grid[h][a] /= total;
+  return grid;
+}
+
+function deriveMarkets(grid){
+  let pHome=0,pDraw=0,pAway=0,pHome0=0,pAway0=0;
+  const overLines = {1.5:0, 2.5:0, 3.5:0};
+  for(let h=0;h<=MAX_G;h++){
+    for(let a=0;a<=MAX_G;a++){
+      const p = grid[h][a];
+      if(h>a) pHome+=p; else if(h===a) pDraw+=p; else pAway+=p;
+      if(h===0) pHome0+=p;
+      if(a===0) pAway0+=p;
+      const total = h+a;
+      for(const line in overLines) if(total > parseFloat(line)) overLines[line]+=p;
+    }
+  }
+  const pBtts = 1 - pHome0 - pAway0 + grid[0][0];
+  return {
+    pHome, pDraw, pAway,
+    over15: overLines[1.5], over25: overLines[2.5], over35: overLines[3.5],
+    under15: 1-overLines[1.5], under25: 1-overLines[2.5], under35: 1-overLines[3.5],
+    btts: pBtts, bttsNo: 1-pBtts,
+    dc1X: pHome+pDraw, dc12: pHome+pAway, dcX2: pDraw+pAway
+  };
+}
+
+function topScores(grid, n){
+  const list = [];
+  for(let h=0;h<=Math.min(MAX_G,6);h++) for(let a=0;a<=Math.min(MAX_G,6);a++) list.push({h,a,p:grid[h][a]});
+  list.sort((x,y)=>y.p-x.p);
+  return list.slice(0,n);
+}
+
+// ---- Kelly + exposure cap. Returns stake 0 if the bet doesn't justify the R50 minimum. ----
+function evaluateMarket(p, odds, bankroll){
+  if(!odds || odds <= 1 || !(p > 0) || p >= 1) return {valid:false, stake:0};
+  const implied = 1/odds;
+  const edge = p - implied;
+  const ev = p*odds - 1;             // expected value per R1 staked
+  const b = odds - 1;
+  const fstar = p - (1-p)/b;          // full Kelly fraction
+  let stake = 0;
+  if(fstar > 0){
+    stake = fstar * 0.25 * bankroll;             // 25% fractional Kelly
+    stake = Math.min(stake, 0.05 * bankroll);    // 5% per-match exposure cap
+    stake = Math.round(stake/10)*10;             // round to R10
+    if(stake < 50) stake = 0;                     // below R50 minimum -> not worth betting
+  }
+  return {valid:true, implied, edge, ev, stake};
+}
+
+let homeChart, awayChart;
+let marketRows = [];
+let lastInputs = null;   // everything computed, for saving
+let lastBest = null;
+let currentBankroll = null;
+
+function buildMarketRows(markets, scores){
+  marketRows = [
+    {id:'home', label:'Home Win', prob:markets.pHome, group:'Match Result', cs:false},
+    {id:'draw', label:'Draw', prob:markets.pDraw, group:'Match Result', cs:false},
+    {id:'away', label:'Away Win', prob:markets.pAway, group:'Match Result', cs:false},
+    {id:'dc1x', label:'1X', prob:markets.dc1X, group:'Double Chance', cs:false},
+    {id:'dc12', label:'12', prob:markets.dc12, group:'Double Chance', cs:false},
+    {id:'dcx2', label:'X2', prob:markets.dcX2, group:'Double Chance', cs:false},
+    {id:'over15', label:'Over 1.5', prob:markets.over15, group:'Total Goals', cs:false},
+    {id:'under15', label:'Under 1.5', prob:markets.under15, group:'Total Goals', cs:false},
+    {id:'over25', label:'Over 2.5', prob:markets.over25, group:'Total Goals', cs:false},
+    {id:'under25', label:'Under 2.5', prob:markets.under25, group:'Total Goals', cs:false},
+    {id:'over35', label:'Over 3.5', prob:markets.over35, group:'Total Goals', cs:false},
+    {id:'under35', label:'Under 3.5', prob:markets.under35, group:'Total Goals', cs:false},
+    {id:'bttsY', label:'BTTS — Yes', prob:markets.btts, group:'Both Teams to Score', cs:false},
+    {id:'bttsN', label:'BTTS — No', prob:markets.bttsNo, group:'Both Teams to Score', cs:false},
+  ];
+  scores.forEach((s,i) => {
+    marketRows.push({id:'score'+i, label:`Correct Score ${s.h}–${s.a}`, prob:s.p,
+                      group: i===0 ? 'Correct Score (reference only — never auto-recommended)' : null, cs:true});
+  });
+}
+
+function renderMarketsTable(){
+  const tbody = document.querySelector('#marketsTable tbody');
+  // preserve any odds already typed
+  const oldVals = {};
+  document.querySelectorAll('.odds-input').forEach(inp => { if(inp.value) oldVals[inp.dataset.id] = inp.value; });
+  let html = '';
+  let lastGroup = null;
+  marketRows.forEach(row => {
+    if(row.group && row.group !== lastGroup){
+      html += `<tr class="group-row"><td colspan="7">${row.group}</td></tr>`;
+      lastGroup = row.group;
+    }
+    html += `<tr id="row-${row.id}">
+      <td class="label">${row.label}</td>
+      <td>${pct(row.prob)}</td>
+      <td><input type="number" step="0.01" min="1.01" placeholder="—" data-id="${row.id}" class="odds-input" value="${oldVals[row.id]||''}"></td>
+      <td id="implied-${row.id}">—</td>
+      <td id="edge-${row.id}">—</td>
+      <td id="ev-${row.id}">—</td>
+      <td id="stake-${row.id}">—</td>
+    </tr>`;
+  });
+  tbody.innerHTML = html;
+  document.querySelectorAll('.odds-input').forEach(inp => inp.addEventListener('input', updateEvaluation));
+}
+
+function updateEvaluation(){
+  const bankroll = currentBankroll || 0;
+  const strikerMissing = document.getElementById('striker').value === 'Y';
+  const knockout = document.getElementById('knockout').value === 'Y';
+  const minEdge = (parseFloat(document.getElementById('minEdge').value) || 0) / 100;
+
+  let best = null;
+  marketRows.forEach(row => {
+    const inp = document.querySelector(`.odds-input[data-id="${row.id}"]`);
+    if(!inp) return;
+    const odds = parseFloat(inp.value);
+    const result = evaluateMarket(row.prob, odds, bankroll);
+    const impliedEl = document.getElementById(`implied-${row.id}`);
+    const edgeEl = document.getElementById(`edge-${row.id}`);
+    const evEl = document.getElementById(`ev-${row.id}`);
+    const stakeEl = document.getElementById(`stake-${row.id}`);
+    const rowEl = document.getElementById(`row-${row.id}`);
+    rowEl.classList.remove('best-row');
+    if(!result.valid){
+      if(inp.value && (parseFloat(inp.value) <= 1)){
+        impliedEl.textContent = 'odds must be > 1.00';
+        impliedEl.style.color = 'var(--red)';
+      } else {
+        impliedEl.textContent = '—'; impliedEl.style.color = '';
+      }
+      edgeEl.textContent = '—'; edgeEl.className=''; evEl.textContent='—'; stakeEl.textContent = '—';
+      return;
+    }
+    impliedEl.style.color = '';
+    impliedEl.textContent = pct(result.implied);
+    edgeEl.textContent = (result.edge>=0?'+':'') + (result.edge*100).toFixed(1) + '%';
+    edgeEl.className = result.edge > 0 ? 'edge-pos' : (result.edge < 0 ? 'edge-neg' : 'edge-zero');
+    evEl.textContent = (result.ev>=0?'+':'') + (result.ev*100).toFixed(1) + '%';
+    evEl.className = result.ev > 0 ? 'edge-pos' : (result.ev < 0 ? 'edge-neg' : 'edge-zero');
+    stakeEl.textContent = result.stake > 0 ? ('R' + result.stake) : '—';
+
+    const qualifies = !row.cs && result.edge >= minEdge && result.stake >= 50 && result.ev > 0;
+    if(qualifies){
+      if(!best || result.ev > best.ev) best = {...row, ...result, rowEl, odds};
+    }
+  });
+
+  // caution flags
+  const flagBox = document.getElementById('flagBox');
+  let flags = [];
+  if(knockout) flags.push('Knockout match — teams play more cautiously; Over/BTTS probabilities tend to be overestimated.');
+  if(lastInputs && Math.abs(lastInputs.elo_gap) >= 250) flags.push(`Elo gap is ${Math.abs(lastInputs.elo_gap)} (≥ 250) — extreme mismatches are hard to model; treat all edges with suspicion.`);
+  if(lastInputs && lastInputs.xg_capped) flags.push(`xG was capped at ${XG_CAP} — the mismatch is beyond what the model handles reliably.`);
+  flagBox.innerHTML = flags.map(f => `<div class="flag-box">⚠ ${f}</div>`).join('');
+
+  const box = document.getElementById('bestBetBox');
+  if(strikerMissing){
+    lastBest = null;
+    box.className = 'bestbet blocked';
+    box.innerHTML = `<div class="verdict">✗ NO BET — key striker missing</div>
+      <div class="detail">Hard override. All odds entered below are still saved for the learning log.</div>`;
+  } else if(best){
+    lastBest = best;
+    box.className = 'bestbet found';
+    box.innerHTML = `<div class="verdict">✓ BET — ${best.label}</div>
+      <div class="detail">
+        Model: <span class="stat">${pct(best.prob)}</span> · Implied: <span class="stat">${pct(best.implied)}</span><br>
+        Edge: <span class="stat">+${(best.edge*100).toFixed(1)}%</span> · EV: <span class="stat">+${(best.ev*100).toFixed(1)}%</span><br>
+        Stake: <span class="stat">R${best.stake}</span> (bankroll R${bankroll})
+      </div>`;
+    best.rowEl.classList.add('best-row');
+  } else {
+    lastBest = null;
+    box.className = 'bestbet none';
+    box.innerHTML = `<div class="verdict">✗ NO BET</div>
+      <div class="detail">No market clears your minimum edge with a stake of at least R50.
+      Everything entered is still saved for the learning log.</div>`;
+  }
+}
+
+function render(){
+  const errorBox = document.getElementById('errorBox');
+  const eH = parseFloat(document.getElementById('homeElo').value);
+  const eA = parseFloat(document.getElementById('awayElo').value);
+  const hs = parseFloat(document.getElementById('homeScored').value);
+  const hc = parseFloat(document.getElementById('homeConceded').value);
+  const as_ = parseFloat(document.getElementById('awayScored').value);
+  const ac = parseFloat(document.getElementById('awayConceded').value);
+  const tournAvg = parseFloat(document.getElementById('tournAvg').value);
+  const rho = parseFloat(document.getElementById('rho').value);
+  const blend = parseFloat(document.getElementById('blend').value);
+  const hN = parseFloat(document.getElementById('homeN').value) || 10;
+  const aN = parseFloat(document.getElementById('awayN').value) || 10;
+  const venue = document.getElementById('venue').value;
+
+  // ---- validation with plain-language explanations ----
+  const problems = [];
+  const missing = [];
+  if(isNaN(eH)) missing.push('Home Elo'); else if(eH < 500 || eH > 2400) problems.push('Home Elo looks wrong — national team ratings are roughly 1000–2200 (check eloratings.net).');
+  if(isNaN(eA)) missing.push('Away Elo'); else if(eA < 500 || eA > 2400) problems.push('Away Elo looks wrong — national team ratings are roughly 1000–2200.');
+  if(isNaN(hs)) missing.push('Home goals scored'); else if(hs < 0 || hs > 10) problems.push('Home goals scored avg must be between 0 and 10.');
+  if(isNaN(hc)) missing.push('Home goals conceded'); else if(hc < 0 || hc > 10) problems.push('Home goals conceded avg must be between 0 and 10.');
+  if(isNaN(as_)) missing.push('Away goals scored'); else if(as_ < 0 || as_ > 10) problems.push('Away goals scored avg must be between 0 and 10.');
+  if(isNaN(ac)) missing.push('Away goals conceded'); else if(ac < 0 || ac > 10) problems.push('Away goals conceded avg must be between 0 and 10.');
+  if(isNaN(tournAvg) || tournAvg <= 0) problems.push('Tournament avg goals must be a positive number (default 1.4).');
+  if(isNaN(blend) || blend < 0 || blend > 1) problems.push('Elo blend weight must be between 0 and 1 (default 0.6).');
+  if(isNaN(rho)) problems.push('Dixon-Coles ρ must be a number (default -0.13).');
+
+  let msgs = [];
+  if(missing.length) msgs.push(`Still needed: ${missing.join(', ')}.`);
+  msgs = msgs.concat(problems);
+
+  if(msgs.length){
+    lastInputs = null;
+    errorBox.innerHTML = `<div class="error-box">${msgs.join('<br>')}</div>`;
+    ['weHome','weAway','eloXgHome','formXgHome','eloXgAway','formXgAway','xgHome','xgAway'].forEach(id => document.getElementById(id).textContent='—');
+    document.getElementById('gridWrap').innerHTML='';
+    document.querySelector('#marketsTable tbody').innerHTML='';
+    document.getElementById('flagBox').innerHTML='';
+    const box = document.getElementById('bestBetBox');
+    box.className='bestbet none';
+    box.innerHTML=`<div class="verdict">Fill in ratings &amp; form</div><div class="detail">Enter both Elo ratings and all four goal averages to calculate xG.</div>`;
+    return;
+  }
+  errorBox.innerHTML = '';
+
+  // ---- Elo-based xG ----
+  const eloHomeEff = eH + (venue === 'home' ? 100 : 0);
+  const wHome = winExpectancy(eloHomeEff, eA);
+  const wAway = 1 - wHome;
+  let eloXgH = eloExpGoals(wHome);
+  let eloXgA = eloExpGoals(wAway);
+
+  // ---- Form-based xG (shrinkage -> attack/defence -> xG) ----
+  const sHS = (hN*hs + 5*tournAvg) / (hN+5);
+  const sHC = (hN*hc + 5*tournAvg) / (hN+5);
+  const sAS = (aN*as_ + 5*tournAvg) / (aN+5);
+  const sAC = (aN*ac + 5*tournAvg) / (aN+5);
+  let formXgH = tournAvg * (sHS/tournAvg) * (sAC/tournAvg);   // = sHS*sAC/tournAvg
+  let formXgA = tournAvg * (sAS/tournAvg) * (sHC/tournAvg);
+
+  // ---- Blend + cap ----
+  let lambda = blend*eloXgH + (1-blend)*formXgH;
+  let mu     = blend*eloXgA + (1-blend)*formXgA;
+  let capped = false;
+  if(lambda > XG_CAP){ lambda = XG_CAP; capped = true; }
+  if(mu > XG_CAP){ mu = XG_CAP; capped = true; }
+  lambda = r2(lambda); mu = r2(mu);
+
+  document.getElementById('weHome').textContent = pct(wHome);
+  document.getElementById('weAway').textContent = pct(wAway);
+  document.getElementById('eloXgHome').textContent = r2(eloXgH);
+  document.getElementById('formXgHome').textContent = r2(formXgH);
+  document.getElementById('eloXgAway').textContent = r2(eloXgA);
+  document.getElementById('formXgAway').textContent = r2(formXgA);
+  document.getElementById('xgHome').textContent = lambda;
+  document.getElementById('xgAway').textContent = mu;
+
+  lastInputs = {
+    home_team: document.getElementById('homeTeam').value || null,
+    away_team: document.getElementById('awayTeam').value || null,
+    match_date: document.getElementById('matchDate').value || null,
+    stage: document.getElementById('stage').value || null,
+    home_elo: eH, away_elo: eA, venue,
+    elo_gap: r2(eloHomeEff - eA),
+    home_scored: hs, home_conceded: hc, away_scored: as_, away_conceded: ac,
+    home_n: document.getElementById('homeN').value ? parseInt(document.getElementById('homeN').value) : null,
+    away_n: document.getElementById('awayN').value ? parseInt(document.getElementById('awayN').value) : null,
+    tourn_avg: tournAvg, rho, xg_blend: blend,
+    striker_missing: document.getElementById('striker').value === 'Y',
+    knockout: document.getElementById('knockout').value === 'Y',
+    home_xg: lambda, away_xg: mu, xg_capped: capped
+  };
+
+  const grid = buildGrid(lambda, mu, rho);
+  const markets = deriveMarkets(grid);
+  const scores = topScores(grid, 5);
+
+  // heatmap (display 0..7 for readability)
+  const SHOW = Math.min(MAX_G, 7);
+  let maxP = 0;
+  for(let h=0;h<=SHOW;h++) for(let a=0;a<=SHOW;a++) maxP = Math.max(maxP, grid[h][a]);
+  let html = '<table class="grid"><tr><th></th>';
+  for(let a=0;a<=SHOW;a++) html += `<th>${a}</th>`;
+  html += '</tr>';
+  for(let h=0;h<=SHOW;h++){
+    html += `<tr><th>${h}</th>`;
+    for(let a=0;a<=SHOW;a++){
+      const p = grid[h][a];
+      const intensity = p / maxP;
+      const bg = `rgba(0,224,232,${0.08 + intensity*0.92})`;
+      const textColor = intensity > 0.5 ? '#05050A' : '#E8E8F0';
+      html += `<td style="background:${bg}; color:${textColor};">${(p*100).toFixed(1)}</td>`;
+    }
+    html += '</tr>';
+  }
+  html += '</table>';
+  document.getElementById('gridWrap').innerHTML = html;
+
+  // marginal distributions
+  const homeMarginal = [], awayMarginal = [];
+  for(let k=0;k<=SHOW;k++){
+    let sh=0, sa=0;
+    for(let j=0;j<=MAX_G;j++){ sh += grid[k][j]; sa += grid[j][k]; }
+    homeMarginal.push(sh); awayMarginal.push(sa);
+  }
+  const labels = Array.from({length:SHOW+1}, (_,i)=>i);
+  const chartOpts = (title) => ({
+    type:'bar',
+    data:{ labels, datasets:[{ data:[], backgroundColor:'#00E0E8' }] },
+    options:{
+      maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, title:{display:true, text:title, color:'#E8E8F0', font:{family:'Space Grotesk', size:10}} },
+      scales:{
+        x:{ ticks:{color:'#8888A0', font:{family:'JetBrains Mono', size:9}}, grid:{color:'#2A2A3A'} },
+        y:{ ticks:{color:'#8888A0', font:{family:'JetBrains Mono', size:9}}, grid:{color:'#2A2A3A'} }
+      }
+    }
+  });
+  if(!homeChart){
+    homeChart = new Chart(document.getElementById('homeDist'), chartOpts('Home goals'));
+    awayChart = new Chart(document.getElementById('awayDist'), chartOpts('Away goals'));
+  }
+  homeChart.data.datasets[0].data = homeMarginal;
+  awayChart.data.datasets[0].data = awayMarginal;
+  homeChart.update();
+  awayChart.update();
+
+  buildMarketRows(markets, scores);
+  renderMarketsTable();
+  updateEvaluation();
+}
+
+// ====== Database ======
+function gatherMatchData(){
+  const bankroll = currentBankroll || 0;
+  const markets = marketRows.map(row => {
+    const inp = document.querySelector(`.odds-input[data-id="${row.id}"]`);
+    const odds = inp ? parseFloat(inp.value) : NaN;
+    const result = evaluateMarket(row.prob, odds, bankroll);
+    return {
+      market: row.label,
+      model_prob: r4(row.prob),
+      odds: isNaN(odds) ? null : odds,
+      implied: result.valid ? r4(result.implied) : null,
+      edge: result.valid ? r4(result.edge) : null,
+      ev: result.valid ? r4(result.ev) : null,
+      stake: result.valid ? result.stake : null
+    };
+  });
+  return {
+    ...lastInputs,
+    bankroll_at_time: bankroll,
+    best_market: lastBest ? lastBest.label : null,
+    best_model_prob: lastBest ? r4(lastBest.prob) : null,
+    best_odds: lastBest ? lastBest.odds : null,
+    best_edge: lastBest ? r4(lastBest.edge) : null,
+    best_stake: lastBest ? lastBest.stake : null,
+    markets
+  };
+}
+
+async function saveMatch(){
+  const statusEl = document.getElementById('saveStatus');
+  if(!DB_READY){
+    statusEl.innerHTML = '<span style="color:var(--amber)">Database not configured — set SUPABASE_URL and SUPABASE_ANON_KEY at the top of the script.</span>';
+    return;
+  }
+  if(!lastInputs){
+    statusEl.innerHTML = '<span style="color:var(--red)">Fill in the ratings and form fields first — nothing has been calculated yet.</span>';
+    return;
+  }
+  statusEl.textContent = 'Saving…';
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/matches`, {
+      method:'POST',
+      headers:{
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type':'application/json',
+        'Prefer':'return=minimal'
+      },
+      body: JSON.stringify(gatherMatchData())
+    });
+    if(!res.ok){
+      const errText = await res.text();
+      if(errText.includes('column') && errText.includes('schema cache')){
+        statusEl.innerHTML = `<span style="color:var(--red)">Save failed: the database is missing new columns. Run the supabase-update.sql script in Supabase's SQL Editor, then try again.</span>`;
+      } else {
+        statusEl.innerHTML = `<span style="color:var(--red)">Save failed (${res.status}): ${errText}</span>`;
+      }
+      return;
+    }
+    statusEl.innerHTML = '<span style="color:var(--green)">Saved.</span>';
+    loadRecentMatches();
+  } catch(err){
+    statusEl.innerHTML = `<span style="color:var(--red)">Save failed: ${err.message}. If you opened this file directly from your computer (file://), the browser blocks database calls — use the GitHub Pages link instead.</span>`;
+  }
+}
+
+async function loadRecentMatches(){
+  const el = document.getElementById('recentMatches');
+  if(!DB_READY){ el.textContent = 'Database not configured.'; return; }
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/matches?select=created_at,home_team,away_team,match_date,best_market,best_edge,best_stake,bet_outcome&order=created_at.desc&limit=10`, {
+      headers:{ 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+    });
+    if(!res.ok){ el.textContent = `Could not load history (${res.status}).`; return; }
+    const rows = await res.json();
+    if(!rows.length){ el.textContent = 'No matches saved yet.'; return; }
+    el.innerHTML = '<table class="markets"><thead><tr><th style="text-align:left;">Match</th><th>Date</th><th>Best Bet</th><th>Edge</th><th>Stake</th><th>Result</th></tr></thead><tbody>' +
+      rows.map(r => `<tr>
+        <td class="label">${r.home_team||'?'} v ${r.away_team||'?'}</td>
+        <td>${r.match_date||'—'}</td>
+        <td class="label">${r.best_market||'NO BET'}</td>
+        <td>${r.best_edge!=null ? (r.best_edge*100).toFixed(1)+'%' : '—'}</td>
+        <td>${r.best_stake!=null ? 'R'+r.best_stake : '—'}</td>
+        <td>${r.bet_outcome||'—'}</td>
+      </tr>`).join('') + '</tbody></table>';
+  } catch(err){
+    el.textContent = `Could not load history: ${err.message}`;
+  }
+}
+
+async function loadBankroll(){
+  const dispEl = document.getElementById('bankrollDisplay');
+  const capEl = document.getElementById('capDisplay');
+  if(!DB_READY){
+    currentBankroll = 5000;
+    dispEl.textContent = 'R5000 (default)';
+    capEl.textContent = 'R250';
+    updateEvaluation();
+    return;
+  }
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/bankroll_transactions?select=balance_after&order=created_at.desc&limit=1`, {
+      headers:{ 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+    });
+    if(!res.ok){ dispEl.textContent = 'Error loading'; return; }
+    const rows = await res.json();
+    currentBankroll = rows.length ? rows[0].balance_after : 0;
+    dispEl.textContent = 'R' + currentBankroll;
+    capEl.textContent = 'R' + r2(currentBankroll * 0.05);
+    updateEvaluation();
+  } catch(err){
+    currentBankroll = 0;
+    dispEl.textContent = 'Error: ' + err.message;
+  }
+}
+
+document.querySelectorAll('input, select').forEach(el => el.addEventListener('input', render));
+render();
+loadRecentMatches();
+loadBankroll();
+</script>
+</body>
+</html>
