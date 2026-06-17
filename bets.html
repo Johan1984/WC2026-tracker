@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WC2026 — Bets Taken</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#0A0A0F; --panel:#12121C; --panel-2:#1A1A28; --line:#2A2A3A;
+    --text:#E8E8F0; --muted:#8888A0;
+    --cyan:#00E0E8; --green:#4ADE80; --red:#F87171; --amber:#FFAA44;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; background:var(--bg); color:var(--text); font-family:'Space Grotesk',sans-serif; padding:28px 36px 80px; }
+  h1{ font-size:1.6rem; font-weight:700; margin:0 0 4px; letter-spacing:0.02em; }
+  .subtitle{ color:var(--muted); font-size:0.9rem; margin:0 0 24px; max-width:900px; line-height:1.5; }
+  nav{ margin-bottom:20px; }
+  nav a{ color:var(--muted); text-decoration:none; font-size:0.85rem; margin-right:18px; border-bottom:2px solid transparent; padding-bottom:4px; }
+  nav a.active{ color:var(--cyan); border-bottom-color:var(--cyan); }
+  nav a:hover{ color:var(--text); }
+
+  .panel{ background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px 20px; margin-bottom:20px; }
+  .panel h2{ font-size:0.78rem; text-transform:uppercase; letter-spacing:0.12em; color:var(--cyan); margin:0 0 14px; font-weight:700; }
+  .hint{ font-size:0.72rem; color:var(--muted); line-height:1.5; }
+
+  /* summary strip */
+  .summary{ display:flex; gap:14px; flex-wrap:wrap; }
+  .stat-card{ flex:1 1 140px; background:var(--panel-2); border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+  .stat-card .lbl{ font-size:0.68rem; text-transform:uppercase; letter-spacing:0.08em; color:var(--muted); margin-bottom:6px; }
+  .stat-card .val{ font-family:'JetBrains Mono',monospace; font-size:1.4rem; font-weight:700; }
+
+  /* controls */
+  label{ display:block; font-size:0.72rem; color:var(--muted); margin:0 0 5px; }
+  input[type=date], input[type=number], input[type=text], select{
+    width:100%; background:#050510; border:1px solid var(--line); border-radius:6px;
+    color:var(--cyan); font-family:'JetBrains Mono',monospace; font-size:0.9rem; padding:7px 9px;
+  }
+  select{ font-family:'Space Grotesk',sans-serif; color:var(--text); }
+  input:focus, select:focus{outline:1px solid var(--cyan);}
+
+  /* edit panel */
+  .two-col{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .calc-label{ font-size:0.7rem; color:var(--muted); margin:10px 0 4px; }
+  .calc-box{
+    background:#111128; border:1px solid var(--line); border-radius:6px;
+    padding:7px 9px; font-family:'JetBrains Mono',monospace; color:#F0E040; font-size:0.85rem; text-align:center;
+  }
+  input.optional-n{ background:#06303a; border-color:var(--cyan); color:#bdfdff; }
+  .act-btn{ padding:3px 9px; font-size:0.7rem; margin:0 0 0 4px; }
+  .act-del{ border-color:var(--red); color:var(--red); }
+  .control-row{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; align-items:end; }
+  button{
+    background:var(--panel-2); border:1px solid var(--line); color:var(--text); border-radius:6px;
+    padding:9px 14px; font-family:'Space Grotesk',sans-serif; font-size:0.82rem; cursor:pointer; transition:border-color .15s;
+  }
+  button:hover{border-color:var(--cyan);}
+  button:disabled{opacity:0.4; cursor:not-allowed;}
+  button.primary{ border-color:var(--green); color:var(--green); }
+
+  .col-pick{ display:flex; flex-wrap:wrap; gap:8px 18px; margin-top:6px; }
+  .col-pick label{ display:flex; align-items:center; gap:6px; font-size:0.78rem; color:var(--text); margin:0; cursor:pointer; }
+  .col-pick input{ accent-color:var(--cyan); width:auto; }
+
+  /* table */
+  .table-scroll{ max-height:62vh; overflow:auto; border:1px solid var(--line); border-radius:8px; }
+  table.bets{ width:100%; border-collapse:collapse; font-size:0.82rem; }
+  table.bets th{
+    position:sticky; top:0; z-index:2; background:var(--panel-2);
+    text-align:right; color:var(--muted); font-size:0.68rem; text-transform:uppercase;
+    letter-spacing:0.06em; padding:9px 8px; border-bottom:1px solid var(--line); white-space:nowrap;
+  }
+  table.bets th:first-child, table.bets th.l{ text-align:left; }
+  table.bets td{ padding:8px; border-bottom:1px solid var(--line); font-family:'JetBrains Mono',monospace; text-align:right; white-space:nowrap; }
+  table.bets td.l{ font-family:'Space Grotesk',sans-serif; text-align:left; }
+  table.bets tr:hover td{ background:rgba(0,224,232,0.04); }
+  .amt-pos{ color:var(--green); font-weight:700; }
+  .amt-neg{ color:var(--red); }
+  .amt-zero{ color:var(--muted); }
+  .badge{ font-family:'Space Grotesk',sans-serif; font-size:0.68rem; padding:2px 8px; border-radius:99px; text-transform:uppercase; letter-spacing:0.05em; }
+  .badge.won{ background:rgba(74,222,128,0.15); color:var(--green); }
+  .badge.lost{ background:rgba(248,113,113,0.15); color:var(--red); }
+  .badge.void{ background:rgba(255,170,68,0.15); color:var(--amber); }
+
+  .pager{ display:flex; align-items:center; gap:12px; margin-top:14px; font-size:0.82rem; }
+  .pager .spacer{ flex:1; }
+  #status{ font-size:0.8rem; margin-top:10px; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="index.html">Match Analyzer</a>
+  <a href="bankroll.html">Bankroll</a>
+  <a href="bets.html" class="active">Bets Taken</a>
+</nav>
+
+<h1>Bets Taken</h1>
+<p class="subtitle">Every bet you actually placed and settled (Won / Lost / Void), newest first. Pending and No-Bet
+matches live in the Match Analyzer's recent list — they don't appear here. Export any date range to Excel below.</p>
+
+<!-- SUMMARY -->
+<div class="panel">
+  <h2>Scoreboard</h2>
+  <div class="summary" id="summary">
+    <div class="stat-card"><div class="lbl">Placed &amp; Settled</div><div class="val" id="sCount">—</div></div>
+    <div class="stat-card"><div class="lbl">Total Staked</div><div class="val" id="sStaked">—</div></div>
+    <div class="stat-card"><div class="lbl">Net P/L</div><div class="val" id="sPnl">—</div></div>
+    <div class="stat-card"><div class="lbl">Avg CLV</div><div class="val" id="sClv">—</div></div>
+    <div class="stat-card"><div class="lbl">Beat the Close</div><div class="val" id="sBeat">—</div></div>
+  </div>
+  <p class="hint" style="margin-top:12px;">Net P/L at R5 stakes is noise — <strong style="color:var(--cyan)">average CLV</strong>
+  is the real signal. Aim for positive CLV across 50+ bets.</p>
+</div>
+
+<!-- CLV CONVERGENCE CHART -->
+<div class="panel">
+  <h2>CLV Convergence</h2>
+  <div style="background:var(--panel-2); border-radius:8px; padding:10px 12px; height:280px;">
+    <canvas id="clvCurve"></canvas>
+  </div>
+  <p class="hint" id="clvChartNote" style="margin-top:10px;">Loading…</p>
+</div>
+
+<!-- EXPORT -->
+<div class="panel">
+  <h2>Export to Excel</h2>
+  <div class="control-row">
+    <div>
+      <label for="fromDate">From (match date)</label>
+      <input type="date" id="fromDate">
+    </div>
+    <div>
+      <label for="toDate">To (match date)</label>
+      <input type="date" id="toDate">
+    </div>
+    <div>
+      <label for="statusFilter">Result filter</label>
+      <select id="statusFilter">
+        <option value="all">All placed (Won / Lost / Void)</option>
+        <option value="won">Won only</option>
+        <option value="lost">Lost only</option>
+        <option value="void">Void only</option>
+      </select>
+    </div>
+    <div>
+      <button class="primary" id="exportBtn" onclick="exportExcel()" style="width:100%;">⬇ Download .xlsx</button>
+    </div>
+  </div>
+
+  <label style="margin-top:16px;">Columns to include <span class="hint">(applies to the "Bets Taken" sheet — the "Full Pricing" sheet always carries the standard market columns)</span></label>
+  <div style="margin:4px 0 8px;">
+    <button onclick="toggleAllCols(true)" style="padding:5px 10px; font-size:0.72rem;">Select all</button>
+    <button onclick="toggleAllCols(false)" style="padding:5px 10px; font-size:0.72rem;">Clear</button>
+  </div>
+  <div class="col-pick" id="colPick"></div>
+  <p class="hint" style="margin-top:12px;">Two sheets are written every time: <strong>Bets Taken</strong> (one row per bet you
+  placed, columns as ticked above) and <strong>Full Pricing</strong> (every market the model priced for each of those matches —
+  odds, edge, EV — so you can audit the lines later). The date range filters on match date; leave both blank for everything.</p>
+  <div id="exportStatus" class="hint" style="margin-top:6px;"></div>
+</div>
+
+<!-- TABLE -->
+<div class="panel">
+  <h2>All Bets</h2>
+  <div style="display:flex; gap:12px; align-items:center; margin-bottom:12px; flex-wrap:wrap;">
+    <div style="min-width:170px;">
+      <label for="sortOrder" style="margin:0;">Order</label>
+      <select id="sortOrder" onchange="renderTable()">
+        <option value="desc">Newest first</option>
+        <option value="asc">Oldest first</option>
+      </select>
+    </div>
+    <div style="min-width:120px;">
+      <label for="pageSize" style="margin:0;">Per page</label>
+      <select id="pageSize" onchange="page=0; renderTable()">
+        <option value="50">50</option>
+        <option value="100">100</option>
+        <option value="25">25</option>
+        <option value="9999">All</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="table-scroll">
+    <table class="bets" id="betsTable">
+      <thead><tr>
+        <th class="l">Date</th><th class="l">Match</th><th class="l">Stage</th><th class="l">Market</th>
+        <th>Odds</th><th>Stake</th><th>Result</th><th>P/L</th><th>Close</th><th>CLV</th><th>Edge</th><th>Actions</th>
+      </tr></thead>
+      <tbody><tr><td colspan="12" class="l" style="color:var(--muted)">Loading…</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="pager" id="pager" style="display:none;">
+    <button id="prevBtn" onclick="prevPage()">‹ Prev</button>
+    <span id="pageInfo" style="color:var(--muted);"></span>
+    <button id="nextBtn" onclick="nextPage()">Next ›</button>
+    <span class="spacer"></span>
+    <span id="rangeInfo" class="hint"></span>
+  </div>
+  <div id="status"></div>
+</div>
+
+<!-- EDIT PANEL -->
+<div id="settlePanel" class="panel" style="display:none; border-color:var(--cyan);">
+  <h2>Edit Bet — <span id="settleMatchName" style="color:var(--text); text-transform:none; letter-spacing:0;"></span></h2>
+  <p class="hint" style="margin-bottom:10px;">Change the market backed, result, odds, stake or closing odds. Saving re-reconciles the
+  bankroll: the old P/L is reversed and the new P/L posted, so editing never double-counts.</p>
+  <div class="two-col">
+    <div>
+      <label for="settleMarket">Market backed</label>
+      <select id="settleMarket"></select>
+    </div>
+    <div>
+      <label for="settleOutcome">Result</label>
+      <select id="settleOutcome">
+        <option value="no_bet">Did NOT place this bet</option>
+        <option value="won">Won</option>
+        <option value="lost">Lost</option>
+        <option value="void">Void / Push (stake returned)</option>
+      </select>
+    </div>
+  </div>
+  <div class="two-col" style="margin-top:6px;">
+    <div>
+      <label for="settleOdds">Odds taken</label>
+      <input type="number" id="settleOdds" step="0.01" min="1.01" placeholder="e.g. 1.95">
+    </div>
+    <div>
+      <label for="settleStake">Stake (R)</label>
+      <input type="number" id="settleStake" step="5" min="0" placeholder="e.g. 5">
+    </div>
+  </div>
+  <div class="two-col" style="margin-top:6px;">
+    <div>
+      <label for="settleCloseOdds">Closing odds (at kick-off)</label>
+      <input type="number" id="settleCloseOdds" step="0.01" min="1.01" class="optional-n" placeholder="e.g. 1.80">
+    </div>
+    <div>
+      <div class="calc-label" style="margin-top:0;">Closing Line Value</div>
+      <div class="calc-box" id="settleClv">—</div>
+    </div>
+  </div>
+  <div class="hint">Closing odds from <strong>oddsportal.com</strong>. CLV = how much your taken price beat the close.</div>
+  <div class="calc-label">Profit / loss if confirmed</div>
+  <div class="calc-box" id="settlePnl" style="font-size:1.05rem;">—</div>
+  <div style="display:flex; gap:10px; margin-top:14px;">
+    <button onclick="confirmSettle()" style="flex:1; border-color:var(--green); color:var(--green);">Save changes &amp; update bankroll</button>
+    <button onclick="closeSettle()" style="flex:0 0 110px;">Cancel</button>
+  </div>
+  <div id="settleStatus" class="hint" style="margin-top:8px;"></div>
+</div>
+
+<script>
+// ====== SUPABASE CONFIG — same values as index.html / bankroll.html ======
+const SUPABASE_URL = 'https://nhjnkysdjccwzgwkvsdp.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5oam5reXNkamNjd3pnd2t2c2RwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEyNzY5ODksImV4cCI6MjA5Njg1Mjk4OX0.5C0_bXc1eaQZlOErAyPc6eaI-76uivKdo2cVJXUhRDs';
+const DB_READY = SUPABASE_URL.startsWith('https://') && SUPABASE_ANON_KEY.length > 50;
+// ==========================================================================
+
+const headers = { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` };
+function r2(x){ return Math.round(x*100)/100; }
+function pct1(x){ return (x*100).toFixed(1) + '%'; }
+function num(x){ return (x===null||x===undefined||isNaN(x)) ? null : x; }
+
+let allBets = [];     // raw rows, settled placed bets only
+let betsById = {};    // id -> row, for edit/delete
+let page = 0;
+let settleId = null;  // id of the bet currently being edited
+
+// The market the punter actually backed, pulled from the saved markets array
+function backedMkt(row){
+  const mkts = Array.isArray(row.markets) ? row.markets : [];
+  return mkts.find(m => m.market === (row.bet_market || row.best_market)) || null;
+}
+function effDate(row){
+  return row.match_date || (row.created_at ? row.created_at.slice(0,10) : (row.settled_at ? row.settled_at.slice(0,10) : ''));
+}
+
+// ---------- Column definitions for the "Bets Taken" sheet ----------
+// get(row, mkt) -> raw value for the cell. mkt = the backed market object (may be null).
+const COLUMNS = [
+  {key:'date',     label:'Match Date',      get:(r,m)=> effDate(r) },
+  {key:'stage',    label:'Stage',           get:(r,m)=> r.stage || '' },
+  {key:'home',     label:'Home Team',       get:(r,m)=> r.home_team || '' },
+  {key:'away',     label:'Away Team',       get:(r,m)=> r.away_team || '' },
+  {key:'knockout', label:'Knockout',        get:(r,m)=> r.knockout ? 'Y':'N' },
+  {key:'homeElo',  label:'Home Elo',        get:(r,m)=> num(r.home_elo) },
+  {key:'awayElo',  label:'Away Elo',        get:(r,m)=> num(r.away_elo) },
+  {key:'eloGap',   label:'Elo Gap',         get:(r,m)=> num(r.elo_gap) },
+  {key:'homeXg',   label:'Home xG',         get:(r,m)=> num(r.home_xg) },
+  {key:'awayXg',   label:'Away xG',         get:(r,m)=> num(r.away_xg) },
+  {key:'totalXg',  label:'Total xG',        get:(r,m)=> (num(r.home_xg)!=null && num(r.away_xg)!=null) ? r2(r.home_xg+r.away_xg) : null },
+  {key:'market',   label:'Market Backed',   get:(r,m)=> r.bet_market || '' },
+  {key:'modelP',   label:'Model Prob %',    get:(r,m)=> m && m.model_prob!=null ? r2(m.model_prob*100) : null },
+  {key:'odds',     label:'Odds Taken',      get:(r,m)=> num(r.bet_odds) },
+  {key:'implied',  label:'Implied %',       get:(r,m)=> m && m.implied!=null ? r2(m.implied*100) : null },
+  {key:'edge',     label:'Edge %',          get:(r,m)=> m && m.edge!=null ? r2(m.edge*100) : null },
+  {key:'ev',       label:'EV %',            get:(r,m)=> m && m.ev!=null ? r2(m.ev*100) : null },
+  {key:'stake',    label:'Stake (R)',       get:(r,m)=> num(r.bet_stake) },
+  {key:'result',   label:'Result',          get:(r,m)=> (r.bet_outcome||'').toUpperCase() },
+  {key:'pnl',      label:'P/L (R)',         get:(r,m)=> num(r.bet_profit) },
+  {key:'close',    label:'Closing Odds',    get:(r,m)=> num(r.bet_close_odds) },
+  {key:'clv',      label:'CLV %',           get:(r,m)=> num(r.clv_pct) },
+  {key:'bankroll', label:'Bankroll at Time',get:(r,m)=> num(r.bankroll_at_time) },
+  {key:'settled',  label:'Settled At',      get:(r,m)=> r.settled_at ? r.settled_at.slice(0,10) : '' },
+];
+
+function buildColPick(){
+  const wrap = document.getElementById('colPick');
+  wrap.innerHTML = COLUMNS.map(c =>
+    `<label><input type="checkbox" class="col-cb" value="${c.key}" checked> ${c.label}</label>`
+  ).join('');
+}
+function toggleAllCols(on){ document.querySelectorAll('.col-cb').forEach(cb => cb.checked = on); }
+
+// ---------- Load ----------
+async function loadBets(){
+  const tbody = document.querySelector('#betsTable tbody');
+  if(!DB_READY){
+    tbody.innerHTML = '<tr><td colspan="12" class="l" style="color:var(--amber)">Database not configured.</td></tr>';
+    return;
+  }
+  try{
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/matches?select=*&bet_outcome=in.(won,lost,void)&order=settled_at.desc&limit=1000`, { headers });
+    if(!res.ok){
+      tbody.innerHTML = `<tr><td colspan="12" class="l" style="color:var(--red)">Could not load (${res.status}).</td></tr>`;
+      return;
+    }
+    allBets = await res.json();
+    betsById = {};
+    allBets.forEach(r => { betsById[r.id] = r; });
+    renderSummary();
+    renderClvChart();
+    renderTable();
+  }catch(err){
+    tbody.innerHTML = `<tr><td colspan="12" class="l" style="color:var(--red)">Load failed: ${err.message}. If you opened this from file://, use the GitHub Pages link instead.</td></tr>`;
+  }
+}
+
+function renderSummary(){
+  const n = allBets.length;
+  document.getElementById('sCount').textContent = n;
+  if(!n){
+    ['sStaked','sPnl','sClv','sBeat'].forEach(id => document.getElementById(id).textContent = '—');
+    return;
+  }
+  const staked = r2(allBets.reduce((s,r)=> s + (r.bet_stake||0), 0));
+  const pnl = r2(allBets.reduce((s,r)=> s + (r.bet_profit||0), 0));
+  const clvRows = allBets.filter(r => r.clv_pct != null);
+  const avgClv = clvRows.length ? r2(clvRows.reduce((s,r)=> s + r.clv_pct, 0)/clvRows.length) : null;
+  const beat = clvRows.filter(r => r.clv_pct > 0).length;
+
+  document.getElementById('sStaked').textContent = 'R' + staked;
+  const pnlEl = document.getElementById('sPnl');
+  pnlEl.textContent = (pnl>=0?'+R':'−R') + Math.abs(pnl);
+  pnlEl.className = 'val ' + (pnl>0?'amt-pos':(pnl<0?'amt-neg':'amt-zero'));
+  const clvEl = document.getElementById('sClv');
+  if(avgClv==null){ clvEl.textContent = '—'; clvEl.className='val amt-zero'; }
+  else { clvEl.textContent = (avgClv>=0?'+':'')+avgClv+'%'; clvEl.className = 'val ' + (avgClv>0?'amt-pos':(avgClv<0?'amt-neg':'amt-zero')); }
+  document.getElementById('sBeat').textContent = clvRows.length ? Math.round(beat/clvRows.length*100)+'%' : '—';
+}
+
+// ---------- CLV convergence chart ----------
+let clvChart;
+function renderClvChart(){
+  const note = document.getElementById('clvChartNote');
+  // chronological (oldest first), only bets with closing odds logged
+  const chrono = [...allBets].sort((a,b)=>{
+    const da = a.settled_at || a.created_at || '';
+    const db = b.settled_at || b.created_at || '';
+    return da>db?1:da<db?-1:0;
+  }).filter(r => r.clv_pct != null);
+
+  if(!chrono.length){
+    note.innerHTML = 'No closing odds logged yet — add them when you settle (oddsportal.com) to start the curve.';
+    if(clvChart){ clvChart.destroy(); clvChart = null; }
+    return;
+  }
+
+  const labels = [], avgLine = [], target = [], zero = [];
+  let sum = 0;
+  chrono.forEach((r,i) => {
+    sum += r.clv_pct;
+    labels.push(i+1);
+    avgLine.push(r2(sum/(i+1)));
+    target.push(2);   // +2% Phase-2 gate
+    zero.push(0);     // break-even
+  });
+  const latest = avgLine[avgLine.length-1];
+  const col = latest>0 ? 'var(--green)' : (latest<0 ? 'var(--red)' : 'var(--muted)');
+  note.innerHTML = `<strong>${chrono.length}</strong> of 50 bets logged with closing odds · current avg CLV
+    <strong style="color:${col};">${latest>=0?'+':''}${latest}%</strong>. The cyan line is your <strong>cumulative average
+    CLV</strong> — it swings early then steadies as the sample grows. Green dashed = the <strong>+2% Phase-2 gate</strong>;
+    grey dashed = break-even.`;
+
+  const data = {
+    labels,
+    datasets:[
+      { label:'Avg CLV %', data:avgLine, borderColor:'#00E0E8', backgroundColor:'rgba(0,224,232,0.10)',
+        tension:0.25, pointRadius:2, pointHoverRadius:4, borderWidth:2, fill:true },
+      { label:'+2% gate', data:target, borderColor:'#4ADE80', borderDash:[6,4], pointRadius:0, borderWidth:1, fill:false },
+      { label:'break-even', data:zero, borderColor:'#8888A0', borderDash:[3,3], pointRadius:0, borderWidth:1, fill:false },
+    ]
+  };
+  if(clvChart){ clvChart.data = data; clvChart.update(); return; }
+  clvChart = new Chart(document.getElementById('clvCurve'), {
+    type:'line', data,
+    options:{
+      maintainAspectRatio:false,
+      interaction:{ intersect:false, mode:'index' },
+      plugins:{
+        legend:{ labels:{ color:'#8888A0', font:{family:'Space Grotesk', size:11}, boxWidth:14 } },
+        tooltip:{ callbacks:{ title:items => `Bet #${items[0].label}` } }
+      },
+      scales:{
+        x:{ title:{display:true, text:'Bets settled with closing odds', color:'#8888A0', font:{family:'Space Grotesk', size:10}},
+            ticks:{ color:'#8888A0', font:{family:'JetBrains Mono', size:9} }, grid:{ color:'#2A2A3A' } },
+        y:{ title:{display:true, text:'Cumulative avg CLV %', color:'#8888A0', font:{family:'Space Grotesk', size:10}},
+            ticks:{ color:'#8888A0', font:{family:'JetBrains Mono', size:9} }, grid:{ color:'#2A2A3A' } }
+      }
+    }
+  });
+}
+
+// ---------- Table render with pagination ----------
+function sortedBets(){
+  const order = document.getElementById('sortOrder').value;
+  const arr = [...allBets].sort((a,b)=>{
+    const da = a.settled_at || a.created_at || '';
+    const db = b.settled_at || b.created_at || '';
+    return order==='desc' ? (db>da?1:db<da?-1:0) : (da>db?1:da<db?-1:0);
+  });
+  return arr;
+}
+
+function renderTable(){
+  const tbody = document.querySelector('#betsTable tbody');
+  const pager = document.getElementById('pager');
+  const arr = sortedBets();
+  const total = arr.length;
+  if(!total){
+    tbody.innerHTML = '<tr><td colspan="12" class="l" style="color:var(--muted)">No placed-and-settled bets yet. Settle a bet (Won/Lost/Void) in the Match Analyzer and it lands here.</td></tr>';
+    pager.style.display = 'none';
+    return;
+  }
+  const size = parseInt(document.getElementById('pageSize').value);
+  const pages = Math.ceil(total/size);
+  if(page >= pages) page = pages-1;
+  if(page < 0) page = 0;
+  const start = page*size;
+  const slice = arr.slice(start, start+size);
+
+  tbody.innerHTML = slice.map(r => {
+    const m = backedMkt(r);
+    const pnl = r.bet_profit;
+    const pnlTxt = pnl==null ? '—' : ((pnl>=0?'+R':'−R')+Math.abs(pnl));
+    const pnlCls = pnl==null ? 'amt-zero' : (pnl>0?'amt-pos':(pnl<0?'amt-neg':'amt-zero'));
+    const clv = r.clv_pct;
+    const clvTxt = clv==null ? '—' : ((clv>=0?'+':'')+clv+'%');
+    const clvCls = clv==null ? 'amt-zero' : (clv>0?'amt-pos':(clv<0?'amt-neg':'amt-zero'));
+    const edge = m && m.edge!=null ? ((m.edge>=0?'+':'')+r2(m.edge*100)+'%') : '—';
+    const oc = (r.bet_outcome||'').toLowerCase();
+    return `<tr>
+      <td class="l">${effDate(r)||'—'}</td>
+      <td class="l">${r.home_team||'?'} v ${r.away_team||'?'}</td>
+      <td class="l">${r.stage||'—'}</td>
+      <td class="l">${r.bet_market||'—'}</td>
+      <td>${r.bet_odds!=null?r.bet_odds:'—'}</td>
+      <td>${r.bet_stake!=null?'R'+r.bet_stake:'—'}</td>
+      <td><span class="badge ${oc}">${oc||'—'}</span></td>
+      <td class="${pnlCls}">${pnlTxt}</td>
+      <td>${r.bet_close_odds!=null?r.bet_close_odds:'—'}</td>
+      <td class="${clvCls}">${clvTxt}</td>
+      <td>${edge}</td>
+      <td><button class="act-btn" onclick="openEdit('${r.id}')">Edit</button><button class="act-btn act-del" onclick="deleteBet('${r.id}')">Del</button></td>
+    </tr>`;
+  }).join('');
+
+  pager.style.display = (pages>1) ? 'flex' : 'none';
+  document.getElementById('pageInfo').textContent = `Page ${page+1} of ${pages}`;
+  document.getElementById('rangeInfo').textContent = `Showing ${start+1}–${Math.min(start+size,total)} of ${total}`;
+  document.getElementById('prevBtn').disabled = page===0;
+  document.getElementById('nextBtn').disabled = page>=pages-1;
+}
+function prevPage(){ if(page>0){ page--; renderTable(); document.querySelector('.table-scroll').scrollTop=0; } }
+function nextPage(){ page++; renderTable(); document.querySelector('.table-scroll').scrollTop=0; }
+
+// ---------- Filter for export ----------
+function filteredForExport(){
+  const from = document.getElementById('fromDate').value;
+  const to   = document.getElementById('toDate').value;
+  const st   = document.getElementById('statusFilter').value;
+  return sortedBets().filter(r => {
+    if(st !== 'all' && (r.bet_outcome||'').toLowerCase() !== st) return false;
+    const d = effDate(r);
+    if(from && d && d < from) return false;
+    if(to   && d && d > to)   return false;
+    if((from||to) && !d) return false;   // can't date-place it
+    return true;
+  });
+}
+
+// ---------- Excel export ----------
+function exportExcel(){
+  const statusEl = document.getElementById('exportStatus');
+  if(typeof XLSX === 'undefined'){
+    statusEl.innerHTML = '<span style="color:var(--red)">Excel library didn\'t load — check your connection and refresh.</span>';
+    return;
+  }
+  const rows = filteredForExport();
+  if(!rows.length){
+    statusEl.innerHTML = '<span style="color:var(--amber)">No bets match that filter / date range.</span>';
+    return;
+  }
+  const chosen = COLUMNS.filter(c => document.querySelector(`.col-cb[value="${c.key}"]`)?.checked);
+  if(!chosen.length){
+    statusEl.innerHTML = '<span style="color:var(--amber)">Tick at least one column for the Bets Taken sheet.</span>';
+    return;
+  }
+
+  // Sheet 1 — Bets Taken (one row per bet, chosen columns)
+  const aoa1 = [ chosen.map(c => c.label) ];
+  rows.forEach(r => {
+    const m = backedMkt(r);
+    aoa1.push(chosen.map(c => { const v = c.get(r,m); return v===null||v===undefined ? '' : v; }));
+  });
+  const ws1 = XLSX.utils.aoa_to_sheet(aoa1);
+  ws1['!cols'] = chosen.map(c => ({ wch: Math.max(c.label.length+2, 12) }));
+
+  // Sheet 2 — Full Pricing (one row per market per match)
+  const head2 = ['Match Date','Home Team','Away Team','Stage','Market','Model Prob %','Odds','Implied %','Edge %','EV %','Stake (R)','Backed?','Result'];
+  const aoa2 = [ head2 ];
+  rows.forEach(r => {
+    const mkts = Array.isArray(r.markets) ? r.markets : [];
+    mkts.forEach(m => {
+      const backed = (m.market === (r.bet_market||r.best_market));
+      aoa2.push([
+        effDate(r), r.home_team||'', r.away_team||'', r.stage||'',
+        m.market||'',
+        m.model_prob!=null ? r2(m.model_prob*100) : '',
+        m.odds!=null ? m.odds : '',
+        m.implied!=null ? r2(m.implied*100) : '',
+        m.edge!=null ? r2(m.edge*100) : '',
+        m.ev!=null ? r2(m.ev*100) : '',
+        m.stake!=null ? m.stake : '',
+        backed ? 'YES' : '',
+        backed ? (r.bet_outcome||'').toUpperCase() : ''
+      ]);
+    });
+  });
+  const ws2 = XLSX.utils.aoa_to_sheet(aoa2);
+  ws2['!cols'] = head2.map(h => ({ wch: Math.max(h.length+2, 11) }));
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws1, 'Bets Taken');
+  XLSX.utils.book_append_sheet(wb, ws2, 'Full Pricing');
+
+  const from = document.getElementById('fromDate').value || 'all';
+  const to   = document.getElementById('toDate').value   || 'all';
+  const fname = `wc2026-bets_${from}_to_${to}.xlsx`;
+  XLSX.writeFile(wb, fname);
+  statusEl.innerHTML = `<span style="color:var(--green)">Downloaded ${rows.length} bet${rows.length===1?'':'s'} → ${fname}</span>`;
+}
+
+// ========== EDIT / DELETE ==========
+function openEdit(id){
+  const row = betsById[id];
+  if(!row) return;
+  settleId = id;
+  document.getElementById('settleMatchName').textContent = `${row.home_team||'?'} v ${row.away_team||'?'}`;
+
+  const sel = document.getElementById('settleMarket');
+  const mkts = Array.isArray(row.markets) ? row.markets : [];
+  const opts = mkts.map((m,i) => {
+    const oddsTxt = m.odds != null ? ` @ ${m.odds}` : '';
+    const pTxt = m.model_prob != null ? ` (${(m.model_prob*100).toFixed(1)}%)` : '';
+    return `<option value="${i}">${m.market}${oddsTxt}${pTxt}</option>`;
+  });
+  sel.innerHTML = opts.length ? opts.join('') : '<option value="-1">No markets stored — edit manually</option>';
+
+  let preIdx = mkts.findIndex(m => m.market === (row.bet_market || row.best_market));
+  if(preIdx < 0) preIdx = 0;
+  sel.value = String(preIdx);
+
+  syncSettleFromMarket();
+  document.getElementById('settleOutcome').value = row.bet_outcome || 'won';
+  if(row.bet_odds != null) document.getElementById('settleOdds').value = row.bet_odds;
+  if(row.bet_stake != null) document.getElementById('settleStake').value = row.bet_stake;
+  document.getElementById('settleCloseOdds').value = row.bet_close_odds != null ? row.bet_close_odds : '';
+
+  updateSettlePnl();
+  document.getElementById('settleStatus').textContent = '';
+  document.getElementById('settlePanel').style.display = '';
+  document.getElementById('settlePanel').scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+function syncSettleFromMarket(){
+  const row = betsById[settleId];
+  if(!row) return;
+  const mkts = Array.isArray(row.markets) ? row.markets : [];
+  const idx = parseInt(document.getElementById('settleMarket').value);
+  const m = mkts[idx];
+  if(m){
+    if(m.odds != null) document.getElementById('settleOdds').value = m.odds;
+    if(m.stake != null && m.stake > 0) document.getElementById('settleStake').value = m.stake;
+  }
+  updateSettlePnl();
+}
+
+function clvValue(){
+  const taken = parseFloat(document.getElementById('settleOdds').value);
+  const close = parseFloat(document.getElementById('settleCloseOdds').value);
+  if(isNaN(taken) || isNaN(close) || taken <= 1 || close <= 1) return null;
+  return r2((taken/close - 1) * 100);
+}
+function updateClvDisplay(){
+  const el = document.getElementById('settleClv');
+  const outcome = document.getElementById('settleOutcome').value;
+  if(outcome === 'no_bet'){ el.textContent = 'n/a'; el.style.color = 'var(--muted)'; return; }
+  const clv = clvValue();
+  if(clv === null){ el.textContent = '—'; el.style.color = '#F0E040'; return; }
+  el.textContent = (clv >= 0 ? '+' : '') + clv + '%';
+  el.style.color = clv > 0 ? 'var(--green)' : (clv < 0 ? 'var(--red)' : 'var(--muted)');
+}
+
+function settlePnlValue(){
+  const outcome = document.getElementById('settleOutcome').value;
+  const odds = parseFloat(document.getElementById('settleOdds').value);
+  const stake = parseFloat(document.getElementById('settleStake').value);
+  if(outcome === 'no_bet') return 0;
+  if(isNaN(stake) || stake < 0) return null;
+  if(outcome === 'void') return 0;
+  if(outcome === 'won'){
+    if(isNaN(odds) || odds <= 1) return null;
+    return r2(stake * (odds - 1));
+  }
+  return -stake;
+}
+function updateSettlePnl(){
+  const outcome = document.getElementById('settleOutcome').value;
+  const pnl = settlePnlValue();
+  const el = document.getElementById('settlePnl');
+  updateClvDisplay();
+  if(outcome === 'no_bet'){ el.textContent = 'No bet — bankroll unchanged'; el.style.color = 'var(--muted)'; return; }
+  if(pnl === null){ el.textContent = '—'; el.style.color = '#F0E040'; return; }
+  el.textContent = (pnl >= 0 ? '+R' : '−R') + Math.abs(pnl);
+  el.style.color = pnl > 0 ? 'var(--green)' : (pnl < 0 ? 'var(--red)' : 'var(--muted)');
+}
+
+function closeSettle(){
+  document.getElementById('settlePanel').style.display = 'none';
+  settleId = null;
+}
+
+async function readLatestBalance(authHeaders){
+  const balRes = await fetch(`${SUPABASE_URL}/rest/v1/bankroll_transactions?select=balance_after&order=created_at.desc&limit=1`, { headers: authHeaders });
+  const balRows = balRes.ok ? await balRes.json() : [];
+  return balRows.length ? balRows[0].balance_after : 0;
+}
+
+async function confirmSettle(){
+  const statusEl = document.getElementById('settleStatus');
+  const row = betsById[settleId];
+  if(!row){ statusEl.innerHTML = '<span style="color:var(--red)">No bet selected.</span>'; return; }
+  const mkts = Array.isArray(row.markets) ? row.markets : [];
+  const idx = parseInt(document.getElementById('settleMarket').value);
+  const marketLabel = mkts[idx] ? mkts[idx].market : (row.bet_market || 'manual');
+  const outcome = document.getElementById('settleOutcome').value;
+  const odds = parseFloat(document.getElementById('settleOdds').value);
+  const stake = parseFloat(document.getElementById('settleStake').value);
+  const closeOdds = parseFloat(document.getElementById('settleCloseOdds').value);
+  const clv = outcome === 'no_bet' ? null : clvValue();
+  const pnl = settlePnlValue();
+
+  if(outcome !== 'no_bet'){
+    if(isNaN(stake) || stake <= 0){ statusEl.innerHTML = '<span style="color:var(--red)">Enter the stake you placed.</span>'; return; }
+    if(outcome !== 'lost' && (isNaN(odds) || odds <= 1)){ statusEl.innerHTML = '<span style="color:var(--red)">Enter valid odds (> 1.00).</span>'; return; }
+    if(pnl === null){ statusEl.innerHTML = '<span style="color:var(--red)">Could not compute P/L — check odds and stake.</span>'; return; }
+  }
+
+  statusEl.textContent = 'Saving…';
+  const authHeaders = { ...headers, 'Content-Type':'application/json' };
+  const prevProfit = (row.bet_outcome && row.bet_outcome !== 'pending' && row.bet_profit != null) ? row.bet_profit : 0;
+  const netDelta = r2(pnl - prevProfit);
+
+  try{
+    const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/matches?id=eq.${settleId}`, {
+      method:'PATCH', headers:{ ...authHeaders, 'Prefer':'return=minimal' },
+      body: JSON.stringify({
+        bet_market: outcome === 'no_bet' ? null : marketLabel,
+        bet_odds: (outcome === 'no_bet' || isNaN(odds)) ? null : odds,
+        bet_stake: outcome === 'no_bet' ? null : stake,
+        bet_outcome: outcome,
+        bet_profit: pnl,
+        bet_close_odds: (outcome === 'no_bet' || isNaN(closeOdds)) ? null : closeOdds,
+        clv_pct: clv,
+        settled_at: new Date().toISOString()
+      })
+    });
+    if(!patchRes.ok){
+      const t = await patchRes.text();
+      statusEl.innerHTML = `<span style="color:var(--red)">Update failed (${patchRes.status}): ${t}</span>`;
+      return;
+    }
+    if(netDelta !== 0){
+      const curBal = await readLatestBalance(authHeaders);
+      const newBal = r2(curBal + netDelta);
+      const txType = outcome === 'won' ? 'bet_win'
+        : outcome === 'void' ? 'bet_void'
+        : outcome === 'no_bet' ? 'bet_correction'
+        : 'bet_loss';
+      await fetch(`${SUPABASE_URL}/rest/v1/bankroll_transactions`, {
+        method:'POST', headers:{ ...authHeaders, 'Prefer':'return=minimal' },
+        body: JSON.stringify({
+          type: txType, amount: netDelta,
+          note: `${row.home_team||'?'} v ${row.away_team||'?'} — edited: ${outcome==='no_bet' ? 'marked no-bet (reversed)' : marketLabel + ' ' + outcome}`,
+          balance_after: newBal
+        })
+      });
+    }
+    closeSettle();
+    loadBets();
+  } catch(err){
+    statusEl.innerHTML = `<span style="color:var(--red)">Save failed: ${err.message}</span>`;
+  }
+}
+
+async function deleteBet(id){
+  const row = betsById[id];
+  if(!row) return;
+  const name = `${row.home_team||'?'} v ${row.away_team||'?'}`;
+  const prevProfit = row.bet_profit || 0;
+  const msg = `Delete this bet?\n\n${name}\n${row.bet_market||'—'} · ${(row.bet_outcome||'').toUpperCase()}\n\n` +
+    `This permanently removes the match row from the database` +
+    (prevProfit !== 0 ? ` and reverses its P/L (${prevProfit>=0?'+R':'−R'}${Math.abs(prevProfit)}) from the bankroll.` : '.') +
+    `\n\nThis cannot be undone.`;
+  if(!confirm(msg)) return;
+
+  const statusEl = document.getElementById('status');
+  statusEl.innerHTML = '<span style="color:var(--muted)">Deleting…</span>';
+  const authHeaders = { ...headers, 'Content-Type':'application/json' };
+  try{
+    if(prevProfit !== 0){
+      const curBal = await readLatestBalance(authHeaders);
+      const newBal = r2(curBal - prevProfit);
+      await fetch(`${SUPABASE_URL}/rest/v1/bankroll_transactions`, {
+        method:'POST', headers:{ ...authHeaders, 'Prefer':'return=minimal' },
+        body: JSON.stringify({ type:'bet_correction', amount:r2(-prevProfit),
+          note:`Deleted bet — ${name} ${row.bet_market||''}`.trim(), balance_after:newBal })
+      });
+    }
+    const delRes = await fetch(`${SUPABASE_URL}/rest/v1/matches?id=eq.${id}`, {
+      method:'DELETE', headers:{ ...authHeaders, 'Prefer':'return=representation' }
+    });
+    if(!delRes.ok){
+      const t = await delRes.text();
+      statusEl.innerHTML = `<span style="color:var(--red)">Delete failed (${delRes.status}): ${t}</span>`;
+      return;
+    }
+    const deleted = await delRes.json().catch(()=>[]);
+    if(Array.isArray(deleted) && deleted.length === 0){
+      statusEl.innerHTML = '<span style="color:var(--amber)">Nothing was deleted — your Supabase row-level-security policy is likely blocking DELETE for the anon key. Add a DELETE policy on the <code>matches</code> table (see notes).</span>';
+      return;
+    }
+    statusEl.innerHTML = `<span style="color:var(--green)">Deleted ${name}.${prevProfit!==0 ? ' Bankroll adjusted.' : ''}</span>`;
+    if(settleId === id) closeSettle();
+    loadBets();
+  } catch(err){
+    statusEl.innerHTML = `<span style="color:var(--red)">Delete failed: ${err.message}</span>`;
+  }
+}
+
+// edit-panel listeners
+document.getElementById('settleMarket').addEventListener('change', syncSettleFromMarket);
+['settleOutcome','settleOdds','settleStake','settleCloseOdds'].forEach(id =>
+  document.getElementById(id).addEventListener('input', updateSettlePnl));
+
+buildColPick();
+loadBets();
+</script>
+</body>
+</html>
